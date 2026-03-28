@@ -20,8 +20,20 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.math.BigDecimal;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.Version;
+
 @Entity
 @Table(name = "portfolio")
+@EntityListeners(AuditingEntityListener.class)
+@SQLDelete(sql = "UPDATE portfolio SET is_deleted = true WHERE id=? and version=?")
+@SQLRestriction("is_deleted=false")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -38,11 +50,26 @@ public class Portfolio {
     @Column(name = "name", length = 100, nullable = false)
     private String name;
 
+    @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
     
+    @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    
+    @Column(name = "cash_balance", nullable = false, precision = 15, scale = 4)
+    @Builder.Default
+    private BigDecimal cashBalance = BigDecimal.ZERO;
+    
+    @Version
+    @Column(name = "version")
+    @Builder.Default
+    private Integer version = 0;
+    
+    @Column(name = "is_deleted", nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @ToString.Exclude

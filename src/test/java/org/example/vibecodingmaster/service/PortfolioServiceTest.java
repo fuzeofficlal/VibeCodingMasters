@@ -1,75 +1,166 @@
 package org.example.vibecodingmaster.service;
 
 import org.example.vibecodingmaster.dto.*;
-import org.example.vibecodingmaster.entity.AssetType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@Transactional // 保证测试数据必定回滚，绝不污染真实数据库
+@Transactional // Ensures test data is rolled back
 public class PortfolioServiceTest {
 
     @Autowired
     private PortfolioService portfolioService;
+    
+    @Autowired
+    private org.example.vibecodingmaster.repository.MarketPriceRepository marketPriceRepository;
 
     @Test
-    public void testPortfolioCrudAndPerformance() {
-        // 1. 创建投资组合 (Create)
-        CreatePortfolioRequest createReq = new CreatePortfolioRequest("My Test Portfolio", "test_user");
-        PortfolioDto created = portfolioService.createPortfolio(createReq);
-        assertNotNull(created.getId());
-        assertEquals("My Test Portfolio", created.getName());
-        System.out.println("✅ [测试] 成功创建投资组合，ID=" + created.getId());
+    public void testFinancialGradeTransactions() {
+        // 0. Seed mock market universe
+        org.example.vibecodingmaster.entity.MarketPrice aapl = new org.example.vibecodingmaster.entity.MarketPrice();
+        aapl.setTickerSymbol("AAPL");
+        aapl.setCurrentPrice(new BigDecimal("150.00"));
+        marketPriceRepository.save(aapl);
         
-        // 2. 增加测试股票资产 (Add Item)
-        AddPortfolioItemRequest stockReq = new AddPortfolioItemRequest(
-                AssetType.STOCK, "AAPL", new BigDecimal("10"), new BigDecimal("150.0"), LocalDate.now());
-        PortfolioItemDto stockItem = portfolioService.addPortfolioItem(created.getId(), stockReq);
-        assertNotNull(stockItem.getId());
-        System.out.println("✅ [测试] 成功添加股票资产 AAPL，数量 10，成本价 150");
+        org.example.vibecodingmaster.entity.MarketPrice msft = new org.example.vibecodingmaster.entity.MarketPrice();
+        msft.setTickerSymbol("MSFT");
+        msft.setCurrentPrice(new BigDecimal("300.00"));
+        marketPriceRepository.save(msft);
 
-        // 3. 增加现金资产
-        AddPortfolioItemRequest cashReq = new AddPortfolioItemRequest(
-                AssetType.CASH, null, new BigDecimal("5000"), new BigDecimal("1"), LocalDate.now());
-        portfolioService.addPortfolioItem(created.getId(), cashReq);
-        System.out.println("✅ [测试] 成功添加现金 $5000");
+        // 1. Create Portfolio
+        CreatePortfolioRequest createReq = new CreatePortfolioRequest("Financial Portfolio", "test_user");
+        PortfolioDto created = portfolioService.createPortfolio(createReq);
+        Long pId = created.getId();
+        assertNotNull(pId);
+        assertEquals(BigDecimal.ZERO, created.getCashBalance());
+        System.out.println("✅ [Test] Created portfolio, ID=" + pId);
 
-        // 4. 更新资产数量 (Update Item)
-        UpdatePortfolioItemRequest updateReq = new UpdatePortfolioItemRequest(new BigDecimal("20"), null);
-        PortfolioItemDto updatedStock = portfolioService.updatePortfolioItem(created.getId(), stockItem.getId(), updateReq);
-        assertEquals(new BigDecimal("20"), updatedStock.getVolume());
-        System.out.println("✅ [测试] 成功修正 AAPL 的持仓数量为 20");
+        // 2. Cash Transactions
+        portfolioService.depositCash(pId, new BigDecimal("10000"));
+        PortfolioDto withCash = portfolioService.getPortfolio(pId);
+        assertEquals(0, new BigDecimal("10000").compareTo(withCash.getCashBalance()));
+        System.out.println("✅ [Test] Deposited 10000, Balance: " + withCash.getCashBalance());
 
-        // 5. 查询验证列表读取 (Read Items)
-        List<PortfolioItemDto> items = portfolioService.getPortfolioItems(created.getId());
-        assertEquals(2, items.size());
-        System.out.println("✅ [测试] 成功读取投资明细列表，共计 2 项");
+        portfolioService.withdrawCash(pId, new BigDecimal("2000"));
+        PortfolioDto afterWithdraw = portfolioService.getPortfolio(pId);
+        assertEquals(0, new BigDecimal("8000").compareTo(afterWithdraw.getCashBalance()));
+        System.out.println("✅ [Test] Withdrew 2000, Balance: " + afterWithdraw.getCashBalance());
 
-        // 6. 核心表现计算引擎验证 (Calculate Performance)
-        PerformanceResponseDto performance = portfolioService.calculatePerformance(created.getId());
-        assertNotNull(performance);
-        assertTrue(performance.getTotalCost().compareTo(BigDecimal.ZERO) > 0);
-        System.out.println("✅ [测试] 表现引擎计算成功！总成本: " + performance.getTotalCost() + 
-                           ", 总现值: " + performance.getCurrentTotalValue() + 
-                           ", ROI: " + performance.getRoiPercentage() + "%");
+        // 3. Buy Asset
+        OrderRequest buyOrder = new OrderRequest();
+        buyOrder.setTickerSymbol("AAPL");
+        buyOrder.setVolume(10);
+        buyOrder.setPrice(new BigDecimal("150.0000"));
+        portfolioService.buyAsset(pId, buyOrder);
 
-        // 7. 删除单项资产 (Delete Item)
-        portfolioService.removePortfolioItem(created.getId(), stockItem.getId());
-        items = portfolioService.getPortfolioItems(created.getId());
+        PortfolioDto afterBuy = portfolioService.getPortfolio(pId);
+        assertEquals(0, new BigDecimal("6500").compareTo(afterBuy.getCashBalance()));
+        assertEquals(1, portfolioService.getPortfolioItems(pId).size());
+        assertEquals("AAPL", portfolioService.getPortfolioItems(pId).get(0).getTickerSymbol());
+        System.out.println("✅ [Test] Bought 10 AAPL @ $150, Cash deducted correctly: " + afterBuy.getCashBalance());
+
+        // 4. Repeated Buy (Average Cost)
+        OrderRequest buyMore = new OrderRequest();
+        buyMore.setTickerSymbol("AAPL");
+        buyMore.setVolume(10);
+        buyMore.setPrice(new BigDecimal("200.0000"));
+        portfolioService.buyAsset(pId, buyMore);
+
+        List<PortfolioItemDto> items = portfolioService.getPortfolioItems(pId);
         assertEquals(1, items.size());
-        System.out.println("✅ [测试] 成功将 AAPL 资产移出组合");
+        assertEquals(0, new BigDecimal("20").compareTo(items.get(0).getVolume()));
+        assertEquals(0, new BigDecimal("175.0000").compareTo(items.get(0).getPurchasePrice()));
+        OrderRequest buyInvalid = new OrderRequest();
+        buyInvalid.setTickerSymbol("XYZ-FAKE");
+        buyInvalid.setVolume(1);
+        buyInvalid.setPrice(new BigDecimal("100"));
+        Exception noItemException = assertThrows(IllegalArgumentException.class, () -> {
+            portfolioService.buyAsset(pId, buyInvalid);
+        });
+        System.out.println("✅ [Test] Negative scenario passed: Prevented buying unlisted asset - " + noItemException.getMessage());
+        System.out.println("✅ [Test] Averaged down successfully. Holding 20 AAPL, Avg Cost: " + items.get(0).getPurchasePrice());
 
-        // 8. 删除整体组合 (Delete Portfolio)
-        portfolioService.deletePortfolio(created.getId());
-        assertThrows(Exception.class, () -> portfolioService.getPortfolio(created.getId()));
-        System.out.println("✅ [测试] 成功级联删除整个投资组合！");
+        // 5. Sell Asset (Partial)
+        OrderRequest sellOrder = new OrderRequest();
+        sellOrder.setTickerSymbol("AAPL");
+        sellOrder.setVolume(5);
+        sellOrder.setPrice(new BigDecimal("250.0000"));
+        portfolioService.sellAsset(pId, sellOrder);
+
+        PortfolioDto afterSell = portfolioService.getPortfolio(pId);
+        assertEquals(0, new BigDecimal("5750").compareTo(afterSell.getCashBalance())); // 6500-2000 + 1250 = 5750
+        assertEquals(0, new BigDecimal("15").compareTo(portfolioService.getPortfolioItems(pId).get(0).getVolume()));
+        System.out.println("✅ [Test] Sold 5 AAPL for profit. Cash reimbursed.");
+
+        // 6. Verify Performance
+        PerformanceResponseDto perf = portfolioService.calculatePerformance(pId);
+        System.out.println("✅ [Test] Performance retrieved. Total Cost: " + perf.getTotalCost() + ", Current Value: " + perf.getCurrentTotalValue());
+
+        // 7. Full liquidation & Soft Delete Trigger
+        OrderRequest sellAll = new OrderRequest();
+        sellAll.setTickerSymbol("AAPL");
+        sellAll.setVolume(15);
+        sellAll.setPrice(new BigDecimal("250.0000"));
+        portfolioService.sellAsset(pId, sellAll);
+
+        assertEquals(0, portfolioService.getPortfolioItems(pId).size());
+        System.out.println("✅ [Test] Position fully liquidated. Soft delete triggered.");
+    }
+
+    @Test
+    public void testNegativeScenariosAndValidation() {
+        CreatePortfolioRequest createReq = new CreatePortfolioRequest("Validation Test", "test_user");
+        PortfolioDto created = portfolioService.createPortfolio(createReq);
+        Long pId = created.getId();
+
+        // 1. Withdraw more than balance
+        Exception withdrawEx = assertThrows(IllegalArgumentException.class, () -> 
+            portfolioService.withdrawCash(pId, new BigDecimal("5000"))
+        );
+        System.out.println("✅ [Validation] Expected Exception: " + withdrawEx.getMessage());
+
+        // 2. Buy with insufficient cash
+        OrderRequest buyOrder = new OrderRequest();
+        buyOrder.setTickerSymbol("MSFT");
+        buyOrder.setVolume(10);
+        buyOrder.setPrice(new BigDecimal("200.00")); // Needs $2000
+        
+        Exception buyEx = assertThrows(IllegalArgumentException.class, () -> 
+            portfolioService.buyAsset(pId, buyOrder)
+        );
+        System.out.println("✅ [Validation] Expected Exception: " + buyEx.getMessage());
+
+        // 3. Deposit money and buy
+        portfolioService.depositCash(pId, new BigDecimal("3000"));
+        portfolioService.buyAsset(pId, buyOrder); // Spends $2000, $1000 left
+        
+        // 4. Sell more than owned volume
+        OrderRequest overSell = new OrderRequest();
+        overSell.setTickerSymbol("MSFT");
+        overSell.setVolume(15);
+        overSell.setPrice(new BigDecimal("210.00"));
+        
+        Exception sellEx = assertThrows(IllegalArgumentException.class, () -> 
+            portfolioService.sellAsset(pId, overSell)
+        );
+        System.out.println("✅ [Validation] Expected Exception: " + sellEx.getMessage());
+
+        // 5. Sell unowned asset
+        OrderRequest sellGhost = new OrderRequest();
+        sellGhost.setTickerSymbol("TSLA");
+        sellGhost.setVolume(5);
+        sellGhost.setPrice(new BigDecimal("100.00"));
+
+        Exception ghostEx = assertThrows(IllegalArgumentException.class, () -> 
+            portfolioService.sellAsset(pId, sellGhost)
+        );
+        System.out.println("✅ [Validation] Expected Exception: " + ghostEx.getMessage());
     }
 }

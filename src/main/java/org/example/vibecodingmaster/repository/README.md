@@ -1,11 +1,9 @@
-# Repository 层 (Data Access)
+# Repository Layer
 
-本目录包含基于 Spring Data JPA 的数据访问接口（Repository）。负责通过 Hibernate 与 MySQL 数据库进行交互。
+A Spring Data JPA abstraction layer for database querying and persistence logic.
 
-## 接口说明
-
-- **[PortfolioRepository](file:///C:/Users/fuzeofficial/VibeCodingNow/VibeCodingMasters/src/main/java/org/example/vibecodingmaster/repository/PortfolioRepository.java)**: 管理 `portfolio` 表。
-- **[PortfolioItemRepository](file:///C:/Users/fuzeofficial/VibeCodingNow/VibeCodingMasters/src/main/java/org/example/vibecodingmaster/repository/PortfolioItemRepository.java)**: 管理持仓明细，包含自定义 `findByPortfolioId` 查询。
-- **[MarketPriceRepository](file:///C:/Users/fuzeofficial/VibeCodingNow/VibeCodingMasters/src/main/java/org/example/vibecodingmaster/repository/MarketPriceRepository.java)**: 管理实时价格，提供 `findByTickerSymbolIn` 批量查询优化性能。
-- **[CompanyInfoRepository](file:///C:/Users/fuzeofficial/VibeCodingNow/VibeCodingMasters/src/main/java/org/example/vibecodingmaster/repository/CompanyInfoRepository.java)**: 管理公司基础信息，支持模糊搜索。
-- **[HistoricalPriceRepository](file:///C:/Users/fuzeofficial/VibeCodingNow/VibeCodingMasters/src/main/java/org/example/vibecodingmaster/repository/HistoricalPriceRepository.java)**: 管理历史价格数据（复合主键支持）。
+## Key Features
+- **Auto-generated Query Strategies**: Avoids native SQL string-building. Provides standard JpaRepository interfaces (`save`, `findById`, `findAll`).
+- **Derived Queries**: Uses Spring Data's naming conventions (e.g., `findByPortfolioIdOrderByCreatedAtDesc`) for automatic pagination and filtering.
+- **Transaction Ledger Awareness**: Implements `TransactionHistoryRepository` to query and reconstruct historic financial flows without manually writing SQL queries.
+- **Support for Optimistic Locks**: Leverages Spring Data JPA capabilities to seamlessly detect version stamp updates and rollback modifications if needed.

@@ -1,0 +1,91 @@
+import time
+import random
+import yfinance as yf
+from datetime import datetime, date
+from sqlalchemy import func
+from sqlalchemy.dialects.mysql import insert
+from models import CompanyInfo, HistoricalPrice
+
+def catch_up_sync(db):
+    """
+    Retrieves the High Watermark (MAX trade_date), fetches missing historical
+    data using yfinance, and bulk UPSERTs into the MySQL historical_price table.
+    """
+    print("[SYNC] Starting Catch-up Sync...")
+
+    # 1. Get all tickers
+    companies = db.query(CompanyInfo.ticker_symbol).all()
+    tickers = [c[0] for c in companies]
+    
+    total_tickers = len(tickers)
+    print(f"[SYNC] Found {total_tickers} tickers to process.")
+
+    for idx, ticker in enumerate(tickers, start=1):
+        try:
+            # 2. Retrieve Watermark
+            watermark = db.query(func.max(HistoricalPrice.trade_date))\
+                          .filter(HistoricalPrice.ticker_symbol == ticker)\
+                          .scalar()
+
+            start_date = watermark.strftime('%Y-%m-%d') if watermark else '2021-01-01'
+
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            # If the watermark is strictly today, we might skip to save API calls
+            if start_date == today_str:
+                continue
+
+            # 3. Fetch Data from yFinance
+            stock = yf.Ticker(ticker)
+            # Add a small buffer by asking for the start_date. yf might include the start_date 
+            # or start from the next day depending on timezone, UPSERT handles duplicates safely.
+            hist = stock.history(start=start_date)
+
+            if hist.empty:
+                print(f"[WARN] [{idx}/{total_tickers}] {ticker} returned no data since {start_date}.")
+                time.sleep(random.uniform(0.5, 1.5))
+                continue
+
+            # 4. Clean Timezones & Extract Data
+            # MySQL DATE type doesn't store timezones. Convert index to naive timezone dates.
+            if hist.index.tz is not None:
+                hist.index = hist.index.tz_localize(None)
+
+            records = []
+            for dt, row in hist.iterrows():
+                trade_date_val = dt.date()
+                close_price_val = float(row['Close'])
+                records.append({
+                    "ticker_symbol": ticker,
+                    "trade_date": trade_date_val,
+                    "close_price": close_price_val
+                })
+
+            if not records:
+                continue
+
+            # 5. Native MySQL Bulk UPSERT (ON DUPLICATE KEY UPDATE)
+            stmt = insert(HistoricalPrice).values(records)
+            upsert_stmt = stmt.on_duplicate_key_update(
+                close_price=stmt.inserted.close_price
+            )
+            
+            # Execute statement
+            db.execute(upsert_stmt)
+            db.commit()
+
+            print(f"[OK] [{idx}/{total_tickers}] {ticker}: Synced {len(records)} records (Watermark: {start_date})")
+            
+            # API rate limit protection after an actual fetch
+            time.sleep(random.uniform(0.5, 1.5))
+
+        except Exception as e:
+            db.rollback()
+            err_str = str(e)
+            if "Too Many Requests" in err_str or "Rate limit" in err_str:
+                print(f"[RATE LIMIT HIT] Sleeping for 15s... ({ticker})")
+                time.sleep(15)
+            else:
+                print(f"[ERROR] syncing {ticker}: {e}")
+                time.sleep(random.uniform(0.5, 1.5))
+        
+    print("[SYNC] Catch-up Sync Complete!")
