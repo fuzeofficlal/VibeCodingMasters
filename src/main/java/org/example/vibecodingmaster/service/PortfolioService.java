@@ -138,6 +138,10 @@ public class PortfolioService {
             throw new IllegalArgumentException("Insufficient cash balance to buy the asset");
         }
         
+        if (!marketPriceRepository.existsById(request.getTickerSymbol())) {
+            throw new IllegalArgumentException("Asset not supported or tracked in the market universe: " + request.getTickerSymbol());
+        }
+
         // 1. Generate Transaction Ledger
         TransactionHistory tx = TransactionHistory.builder()
                 .portfolio(portfolio).transactionType(TransactionType.BUY)

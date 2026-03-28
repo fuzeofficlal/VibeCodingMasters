@@ -145,7 +145,12 @@
   </div>
   <div id="portfolio-list"></div>
   <div class="sidebar-footer">
-    <button id="btn-new-portfolio" onclick="openNewPortfolioModal()">+ New Portfolio</button>
+    <button id="btn-new-portfolio" onclick="openNewPortfolioModal()" style="margin-bottom:1rem;">+ New Portfolio</button>
+    <div style="border-top:1px solid var(--border); padding-top:1rem;">
+      <p style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; margin-bottom: 8px;">Developer Tools</p>
+      <button onclick="triggerEtlSync()" style="width:100%; padding:0.6rem; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; margin-bottom: 6px; display:flex; align-items:center; gap:6px;"><span>🔄</span> Trigger ETL Sync</button>
+      <button onclick="openDbExplorer()" style="width:100%; padding:0.6rem; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; display:flex; align-items:center; gap:6px;"><span>🗃️</span> Open DB Explorer</button>
+    </div>
   </div>
 </div>
 
@@ -206,8 +211,26 @@
   </div>
 </div>
 
+<!-- DB Explorer Modal -->
+<div id="db-modal-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:999;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;width:800px;max-width:95vw;height:80vh;display:flex;flex-direction:column;">
+    <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 1rem;">Database Explorer (VibeCoding)</h3>
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+      <input type="text" id="db-table-name" placeholder="Table name (e.g. portfolio, market_price, transaction_history)" value="portfolio" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:0.5rem;font-size:0.85rem;">
+      <button onclick="fetchTableData()" class="btn-sm btn-primary">Query</button>
+      <button onclick="closeDbExplorer()" class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--text)">Close</button>
+    </div>
+    <div id="db-results-container" style="flex:1;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0;">
+      <table id="db-results-table" style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+        <thead id="db-results-head"></thead>
+        <tbody id="db-results-body"><tr><td style="padding:1rem;color:var(--text-muted);text-align:center;">Results will appear here...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
-const API = '/api/v1';
+const API = '/api/v2';
 let selectedPortfolioId = null;
 let chartInstance = null;
 let modalAction = null;
@@ -236,6 +259,60 @@ window.addEventListener('load', () => {
 
   loadPortfolios();
 });
+
+// ── Developer Tools ────────────────────────────────────
+async function triggerEtlSync() {
+  if (!confirm('This will trigger the Python Microservice to download all missing historical data. It runs in the background. Proceed?')) return;
+  try {
+    const res = await fetch(`${API}/market/sync`, { method: 'POST' });
+    if(res.ok) alert('ETL Sync Triggered successfully! Check Python console.');
+    else alert('Failed to trigger Sync. Ensure Python is running.');
+  } catch (e) {
+    alert('Failed to connect to Gateway or Market Service.');
+  }
+}
+function openDbExplorer() { document.getElementById('db-modal-backdrop').style.display = 'flex'; }
+function closeDbExplorer() { document.getElementById('db-modal-backdrop').style.display = 'none'; }
+async function fetchTableData() {
+  const tName = document.getElementById('db-table-name').value.trim();
+  if(!tName) return;
+  const tbody = document.getElementById('db-results-body');
+  const thead = document.getElementById('db-results-head');
+  tbody.innerHTML = '<tr><td style="padding:1rem;color:var(--text-muted);text-align:center;">Querying...</td></tr>';
+  thead.innerHTML = '';
+  
+  try {
+    const res = await fetch(`${API}/debug/table/${tName}`);
+    if (!res.ok) {
+        tbody.innerHTML = `<tr><td style="padding:1rem;color:var(--danger);text-align:center;">Error fetching table (Check name)</td></tr>`;
+        return;
+    }
+    const json = await res.json();
+    const data = json.data;
+    if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td style="padding:1rem;color:var(--text-muted);text-align:center;">Table exists but is empty.</td></tr>`;
+        return;
+    }
+    
+    // Build Headers
+    const keys = Object.keys(data[0]);
+    let hStr = '<tr>';
+    keys.forEach(k => { hStr += `<th>${k}</th>`; });
+    hStr += '</tr>';
+    thead.innerHTML = hStr;
+    
+    // Build Body
+    let bStr = '';
+    data.forEach(row => {
+        bStr += '<tr>';
+        keys.forEach(k => { bStr += `<td>${row[k]}</td>`; });
+        bStr += '</tr>';
+    });
+    tbody.innerHTML = bStr;
+  } catch(e) {
+      tbody.innerHTML = `<tr><td style="padding:1rem;color:var(--danger);text-align:center;">Network error. Are services running?</td></tr>`;
+  }
+}
 
 // ── Portfolio List ────────────────────────────────────
 async function loadPortfolios() {
@@ -280,7 +357,6 @@ async function loadItems(pid) {
   const res = await fetch(`${API}/portfolios/${pid}/items`);
   const items = await res.json();
   const container = document.getElementById('table-container');
-  document.getElementById('stat-count').textContent = items.length;
   if (!items.length) {
     container.innerHTML = '<div id="empty-state">No holdings yet. Click "+ Add Asset" to add one.</div>';
     return;

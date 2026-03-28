@@ -17,9 +17,23 @@ public class PortfolioServiceTest {
 
     @Autowired
     private PortfolioService portfolioService;
+    
+    @Autowired
+    private org.example.vibecodingmaster.repository.MarketPriceRepository marketPriceRepository;
 
     @Test
     public void testFinancialGradeTransactions() {
+        // 0. Seed mock market universe
+        org.example.vibecodingmaster.entity.MarketPrice aapl = new org.example.vibecodingmaster.entity.MarketPrice();
+        aapl.setTickerSymbol("AAPL");
+        aapl.setCurrentPrice(new BigDecimal("150.00"));
+        marketPriceRepository.save(aapl);
+        
+        org.example.vibecodingmaster.entity.MarketPrice msft = new org.example.vibecodingmaster.entity.MarketPrice();
+        msft.setTickerSymbol("MSFT");
+        msft.setCurrentPrice(new BigDecimal("300.00"));
+        marketPriceRepository.save(msft);
+
         // 1. Create Portfolio
         CreatePortfolioRequest createReq = new CreatePortfolioRequest("Financial Portfolio", "test_user");
         PortfolioDto created = portfolioService.createPortfolio(createReq);
@@ -63,6 +77,14 @@ public class PortfolioServiceTest {
         assertEquals(1, items.size());
         assertEquals(0, new BigDecimal("20").compareTo(items.get(0).getVolume()));
         assertEquals(0, new BigDecimal("175.0000").compareTo(items.get(0).getPurchasePrice()));
+        OrderRequest buyInvalid = new OrderRequest();
+        buyInvalid.setTickerSymbol("XYZ-FAKE");
+        buyInvalid.setVolume(1);
+        buyInvalid.setPrice(new BigDecimal("100"));
+        Exception noItemException = assertThrows(IllegalArgumentException.class, () -> {
+            portfolioService.buyAsset(pId, buyInvalid);
+        });
+        System.out.println("✅ [Test] Negative scenario passed: Prevented buying unlisted asset - " + noItemException.getMessage());
         System.out.println("✅ [Test] Averaged down successfully. Holding 20 AAPL, Avg Cost: " + items.get(0).getPurchasePrice());
 
         // 5. Sell Asset (Partial)

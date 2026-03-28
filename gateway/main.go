@@ -31,11 +31,36 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":502,"message":"Backend service unavailable. Please start the Spring Boot server."}`))
 	}
 
-	// Proxy business APIs
+// Proxy business APIs (v1 direct backend bypass support)
 	r.Any("/api/v1/*proxyPath", func(c *gin.Context) {
 		proxyPath := c.Param("proxyPath")
 		c.Request.URL.Path = "/api/v1" + proxyPath
 		rp.ServeHTTP(c.Writer, c.Request)
+	})
+
+    // Python Market Data Reverse Proxy
+	marketTarget, _ := url.Parse("http://localhost:8000")
+	marketRP := httputil.NewSingleHostReverseProxy(marketTarget)
+	marketRP.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"status":502,"message":"Market Data service unavailable. Please start Python FastAPI."}`))
+	}
+
+	// Formal Gateway API (v2)
+	r.Any("/api/v2/*proxyPath", func(c *gin.Context) {
+		proxyPath := c.Param("proxyPath")
+		
+		// If path starts with /market or /debug routing to appropriate backend
+		if len(proxyPath) > 7 && proxyPath[:7] == "/market" {
+			// Rewrite to v1 for Python compatibility
+			c.Request.URL.Path = "/api/v1" + proxyPath
+			marketRP.ServeHTTP(c.Writer, c.Request)
+		} else {
+			// Proxy to Java Backend (rewriting v2 -> v1 backward compatibility)
+			c.Request.URL.Path = "/api/v1" + proxyPath
+			rp.ServeHTTP(c.Writer, c.Request)
+		}
 	})
 
 	// Proxy Swagger documentation
@@ -57,7 +82,7 @@ func main() {
 	})
 
 	log.Printf("🚀 Portfolio API Gateway started on http://localhost%s", gatewayPort)
-	log.Printf("   Proxying to backend: %s", backendURL)
+	log.Printf("   Proxying v2 default to backend: %s", backendURL)
 	log.Printf("   CORS: Enabled | Rate Limit: 20 req/s")
 
 	if err := r.Run(gatewayPort); err != nil {
