@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.junit.jupiter.api.BeforeEach;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -21,19 +23,26 @@ public class PortfolioServiceTest {
     @Autowired
     private org.example.vibecodingmaster.repository.MarketPriceRepository marketPriceRepository;
 
+    @BeforeEach
+    public void setupMarketUniverse() {
+        // Seed mock market universe for all test methods
+        if (!marketPriceRepository.existsById("AAPL")) {
+            org.example.vibecodingmaster.entity.MarketPrice aapl = new org.example.vibecodingmaster.entity.MarketPrice();
+            aapl.setTickerSymbol("AAPL");
+            aapl.setCurrentPrice(new BigDecimal("150.00"));
+            marketPriceRepository.save(aapl);
+        }
+        
+        if (!marketPriceRepository.existsById("MSFT")) {
+            org.example.vibecodingmaster.entity.MarketPrice msft = new org.example.vibecodingmaster.entity.MarketPrice();
+            msft.setTickerSymbol("MSFT");
+            msft.setCurrentPrice(new BigDecimal("300.00"));
+            marketPriceRepository.save(msft);
+        }
+    }
+
     @Test
     public void testFinancialGradeTransactions() {
-        // 0. Seed mock market universe
-        org.example.vibecodingmaster.entity.MarketPrice aapl = new org.example.vibecodingmaster.entity.MarketPrice();
-        aapl.setTickerSymbol("AAPL");
-        aapl.setCurrentPrice(new BigDecimal("150.00"));
-        marketPriceRepository.save(aapl);
-        
-        org.example.vibecodingmaster.entity.MarketPrice msft = new org.example.vibecodingmaster.entity.MarketPrice();
-        msft.setTickerSymbol("MSFT");
-        msft.setCurrentPrice(new BigDecimal("300.00"));
-        marketPriceRepository.save(msft);
-
         // 1. Create Portfolio
         CreatePortfolioRequest createReq = new CreatePortfolioRequest("Financial Portfolio", "test_user");
         PortfolioDto created = portfolioService.createPortfolio(createReq);

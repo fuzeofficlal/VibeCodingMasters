@@ -5,6 +5,7 @@ from typing import List
 from database import engine, get_db
 import models
 from scheduler import start_scheduler, run_sync_task
+from services import quant_engine
 
 app = FastAPI(
     title="Market Data Microservice",
@@ -60,3 +61,7 @@ async def get_historical_prices(
         
     results = query.all()
     return [{"trade_date": r.trade_date, "close_price": r.close_price} for r in results]
+
+@app.get("/api/v1/market/indicators/sma/{ticker}", summary="[Task 4] Get Simple Moving Average (SMA)")
+async def get_sma_indicator(ticker: str, days: int = Query(50, description="Rolling window days (e.g. 20, 50, 200)")):
+    return quant_engine.calculate_sma(ticker, days)

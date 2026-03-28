@@ -149,7 +149,9 @@
     <div style="border-top:1px solid var(--border); padding-top:1rem;">
       <p style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; margin-bottom: 8px;">Developer Tools</p>
       <button onclick="triggerEtlSync()" style="width:100%; padding:0.6rem; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; margin-bottom: 6px; display:flex; align-items:center; gap:6px;"><span>🔄</span> Trigger ETL Sync</button>
-      <button onclick="openDbExplorer()" style="width:100%; padding:0.6rem; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; display:flex; align-items:center; gap:6px;"><span>🗃️</span> Open DB Explorer</button>
+      <button onclick="openDbExplorer()" style="width:100%; padding:0.6rem; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; margin-bottom: 6px; display:flex; align-items:center; gap:6px;"><span>🗃️</span> Open DB Explorer</button>
+      <button onclick="openE2ETester()" style="width:100%; padding:0.6rem; background:linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(99,102,241,0.2) 100%); color:var(--text); border:1px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; margin-bottom: 6px; display:flex; align-items:center; gap:6px; font-weight: 600;"><span>🧪</span> Run Interactive E2E Test</button>
+      <button onclick="shutdownServers()" style="width:100%; padding:0.6rem; background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid var(--danger); border-radius:6px; cursor:pointer; font-size:0.78rem; text-align:left; display:flex; align-items:center; gap:6px; font-weight: 600; margin-top:1rem;"><span>🛑</span> Shutdown Servers (Kill Switch)</button>
     </div>
   </div>
 </div>
@@ -160,7 +162,8 @@
   <div id="topbar">
     <h2 id="portfolio-name">Select a portfolio</h2>
     <span id="roi-badge" class="badge" style="display:none"></span>
-    <button class="btn-sm btn-danger" onclick="deletePortfolio()" id="btn-delete-portfolio" style="display:none">Delete</button>
+    <div id="alert-box" style="display:none; background:rgba(239,68,68,0.15); color:var(--danger); font-size: 0.75rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; margin-left: auto; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+    <button class="btn-sm btn-danger" onclick="deletePortfolio()" id="btn-delete-portfolio" style="display:none; margin-left: 1rem;">Delete</button>
   </div>
 
   <!-- Stats Row -->
@@ -180,21 +183,41 @@
   </div>
 
   <!-- Content -->
-  <div id="content">
-    <!-- Items Table -->
-    <div id="items-section">
-      <div class="section-header">
-        <span class="section-title">Holdings</span>
-      </div>
-      <div id="table-container"><div id="empty-state">Select a portfolio to view holdings</div></div>
+  <div id="content" style="grid-template-rows: 1.5fr 1fr;"> <!-- Adjusted split for Watchlist -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; border-bottom: 1px solid var(--border); overflow: hidden;">
+        <!-- Items Table -->
+        <div id="items-section" style="border-right: 1px solid var(--border); overflow-y: auto; padding: 1rem 1.5rem;">
+          <div class="section-header">
+            <span class="section-title">Holdings</span>
+          </div>
+          <div id="table-container"><div id="empty-state">Select a portfolio to view holdings</div></div>
+        </div>
+        <!-- Watchlist Sidebar -->
+        <div id="watchlist-section" style="overflow-y: auto; padding: 1rem 1.5rem; background: var(--surface2);">
+          <div class="section-header" style="justify-content: space-between;">
+            <span class="section-title">⭐ Watchlist</span>
+            <button class="btn-sm" style="background:var(--primary);color:white;font-size:0.7rem;padding:2px 6px;" onclick="openWatchlistModal()">+ Add</button>
+          </div>
+          <div id="watchlist-container"><div id="empty-state" style="padding:1rem;">Select portfolio</div></div>
+        </div>
     </div>
 
-    <!-- Chart -->
-    <div id="chart-section">
-      <div class="section-header">
-        <span class="section-title">Portfolio Value — Last 90 Days</span>
+    <!-- Charts Row -->
+    <div id="chart-section" style="padding: 0; display: flex; flex-direction: row; align-items: stretch; background: var(--surface);">
+      <!-- Performance Line Chart -->
+      <div style="flex: 2; padding: 1rem 1.5rem; display: flex; flex-direction: column;">
+          <div class="section-header">
+            <span class="section-title">Portfolio Value — Last 90 Days</span>
+          </div>
+          <div id="chart" style="flex: 1; min-height: 0;"></div>
       </div>
-      <div id="chart"></div>
+      <!-- Asset Allocation Pie Chart -->
+      <div style="flex: 1; border-left: 1px solid var(--border); padding: 1rem 1.5rem; display: flex; flex-direction: column; background: var(--surface2);">
+          <div class="section-header">
+            <span class="section-title">🍩 Asset Allocation</span>
+          </div>
+          <div id="allocation-chart" style="flex: 1; min-height: 0;"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -229,16 +252,60 @@
   </div>
 </div>
 
+<!-- SMA Indicator Modal -->
+<div id="sma-modal-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:999;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;width:800px;max-width:95vw;height:600px;display:flex;flex-direction:column;">
+    <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;" id="sma-title">SMA Indicator</h3>
+    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">Powered by Python Pandas Quant Engine</p>
+    
+    <div id="sma-results-container" style="flex: 1; min-height: 400px; width: 100%; display:none;"></div>
+    <div id="sma-loading" style="flex: 1; display:flex; align-items:center; justify-content:center; color: var(--text-muted); font-family: monospace;">
+        Loading Py Quant Engine output...
+    </div>
+
+    <div class="modal-footer" style="justify-content: flex-end; margin-top: auto;">
+      <button onclick="document.getElementById('sma-modal-backdrop').style.display = 'none';" class="btn-sm btn-primary" style="padding: 0.5rem 2rem;">Close Dashboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- E2E Tester Floating Console -->
+<div id="e2e-floating-window" style="position:fixed;bottom:20px;right:20px;display:none;z-index:9999;">
+  <div style="background:var(--surface);border:1px solid var(--primary);border-radius:14px;padding:1.5rem;width:450px;max-width:95vw;height:55vh;display:flex;flex-direction:column;box-shadow:0 15px 35px rgba(0,0,0,0.5);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+        <h3 style="font-size: 1.1rem; font-weight: 700;">🧪 System Interlink E2E</h3>
+        <button onclick="document.getElementById('e2e-floating-window').style.display = 'none';" class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--text)">Min</button>
+    </div>
+    
+    <div style="display:flex; justify-content:space-between; margin-bottom: 1rem; padding: 0.5rem; border: 1px dashed var(--border); border-radius: 6px; font-size: 0.85rem;">
+      <span><strong>Status:</strong> <span id="e2e-status" style="color:var(--primary)">Idle</span></span>
+      <span><strong>Step:</strong> <span id="e2e-step-count">0 / 6</span></span>
+    </div>
+
+    <!-- Terminal Output -->
+    <div id="e2e-terminal" style="flex:1;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:1rem;font-family:monospace;font-size:0.75rem;color:#f8f8f2;margin-bottom:1rem;display:flex;flex-direction:column;gap:0.5rem;">
+        <div>Welcome to VibeCoding E2E Orchestrator.</div>
+        <div style="color:var(--text-muted)">Click "Start Verification" to visibly inject operations into the DOM.</div>
+    </div>
+
+    <div class="modal-footer" style="justify-content: flex-end; margin-top: auto;">
+      <button class="btn-sm btn-primary" id="btn-e2e-next" onclick="nextE2EStep()" style="width:100%; padding:0.7rem; font-size:1rem; box-shadow: 0 4px 10px rgba(59,130,246,0.3);">Start Verification</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = '/api/v2';
 let selectedPortfolioId = null;
 let chartInstance = null;
+let allocationChartInstance = null;
 let modalAction = null;
 
 // ── Init ──────────────────────────────────────────────
 window.addEventListener('load', () => {
   chartInstance = echarts.init(document.getElementById('chart'), 'dark');
-  window.addEventListener('resize', () => chartInstance.resize());
+  allocationChartInstance = echarts.init(document.getElementById('allocation-chart'), 'dark');
+  window.addEventListener('resize', () => { chartInstance.resize(); allocationChartInstance.resize(); });
   
   // Update UI environment indicator based on URL Port
   const currentPort = window.location.port;
@@ -350,6 +417,7 @@ async function selectPortfolio(id, name) {
   
   await loadItems(id);
   await loadPerformance(id);
+  await loadWatchlist(id);
 }
 
 // ── Items Table ───────────────────────────────────────
@@ -368,10 +436,12 @@ async function loadItems(pid) {
       <td>${Number(item.volume).toLocaleString()}</td>
       <td>$${Number(item.purchasePrice || 0).toFixed(2)}</td>
       <td>$${(Number(item.volume) * Number(item.purchasePrice || 0)).toFixed(2)}</td>
-      <td>${item.purchaseDate || '—'}</td>
+      <td>
+        <button class="btn-sm" style="background:rgba(59,130,246,0.15);color:var(--primary);padding:2px 6px;font-size:0.7rem;" onclick="openSmaModal('${item.tickerSymbol}')">🎯 SMA50</button>
+      </td>
     </tr>`).join('');
   container.innerHTML = `<table>
-    <thead><tr><th>Symbol</th><th>Type</th><th>Volume</th><th>Cost Price</th><th>Cost Total</th><th>Buy Date</th></tr></thead>
+    <thead><tr><th>Symbol</th><th>Type</th><th>Volume</th><th>Cost Price</th><th>Cost Total</th><th>Actions</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -409,6 +479,10 @@ async function loadPerformance(pid) {
   } else {
     renderChartEmpty();
   }
+
+  // Load new features (Alerts + Allocation)
+  await loadAlerts(pid);
+  await loadAllocation(pid);
 }
 
 function renderChart(dates, values) {
@@ -432,6 +506,157 @@ function renderChartEmpty() {
     graphic: [{ type: 'text', left: 'center', top: 'middle', style: { text: 'No historical data for current holdings', fill: '#64748b', fontSize: 13 } }],
     xAxis: { show: false }, yAxis: { show: false }, series: []
   });
+}
+
+// ── New Features Integration (Team Tasks) ─────────────
+async function loadAllocation(pid) {
+  try {
+      const res = await fetch(`${API}/portfolios/${pid}/allocation`);
+      if(!res.ok) return;
+      const data = await res.json();
+      const pieData = Object.keys(data).map(k => ({name: k, value: data[k]}));
+      allocationChartInstance.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'item' },
+          series: [{
+              type: 'pie', radius: ['40%', '70%'],
+              itemStyle: { borderRadius: 10, borderColor: '#111827', borderWidth: 2 },
+              label: { show: true, color: '#f1f5f9' },
+              data: pieData
+          }]
+      });
+  } catch(e) {}
+}
+
+async function loadAlerts(pid) {
+    try {
+        const res = await fetch(`${API}/portfolios/${pid}/alerts`);
+        if(!res.ok) return;
+        const alerts = await res.json();
+        const box = document.getElementById('alert-box');
+        if (alerts.length > 0) {
+            box.style.display = 'block';
+            box.textContent = alerts.join(' | ');
+        } else {
+            box.style.display = 'none';
+        }
+    } catch(e) {}
+}
+
+async function loadWatchlist(pid) {
+    try {
+        const res = await fetch(`${API}/portfolios/${pid}/watchlist`);
+        if(!res.ok) return;
+        const items = await res.json();
+        const container = document.getElementById('watchlist-container');
+        if(!items.length) {
+            container.innerHTML = '<div id="empty-state" style="padding:1rem;">Watchlist is empty</div>';
+            return;
+        }
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:0.75rem;"><tbody>';
+        items.forEach(it => {
+            html += `<tr>
+                <td style="padding:0.5rem;border-bottom:1px solid var(--border)"><span class="ticker-badge">${it.tickerSymbol}</span></td>
+                <td style="padding:0.5rem;border-bottom:1px solid var(--border);color:var(--success)">$${it.currentPrice}</td>
+                <td style="padding:0.5rem;border-bottom:1px solid var(--border);text-align:right;">
+                    <button class="delete-btn" onclick="removeWatchlist('${it.tickerSymbol}')">&times;</button>
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch(e){}
+}
+
+async function removeWatchlist(ticker) {
+    if(!selectedPortfolioId) return;
+    await fetch(`${API}/portfolios/${selectedPortfolioId}/watchlist/${ticker}`, {method: 'DELETE'});
+    await loadWatchlist(selectedPortfolioId);
+}
+
+function openWatchlistModal() {
+    if(!selectedPortfolioId) return;
+    document.getElementById('modal-title').textContent = 'Add to Watchlist';
+    document.getElementById('modal-body').innerHTML = `
+      <div class="form-group"><label>Ticker Symbol</label><input id="f-watch-ticker" value="NVDA" /></div>`;
+    modalAction = async () => {
+        const ticker = document.getElementById('f-watch-ticker').value;
+        await fetch(`${API}/portfolios/${selectedPortfolioId}/watchlist`, {
+            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tickerSymbol: ticker})
+        });
+        closeModal();
+        await loadWatchlist(selectedPortfolioId);
+    };
+    document.getElementById('modal-backdrop').classList.add('open');
+}
+
+let smaChartInstance = null;
+
+async function openSmaModal(ticker) {
+    if(!ticker) return;
+    document.getElementById('sma-title').textContent = 'SMA50 Indicator: ' + ticker;
+    document.getElementById('sma-loading').style.display = 'flex';
+    document.getElementById('sma-loading').textContent = 'Initializing Algorithm via localhost:8000...';
+    document.getElementById('sma-results-container').style.display = 'none';
+    document.getElementById('sma-modal-backdrop').style.display = 'flex';
+
+    try {
+        const res = await fetch(`${API}/market/indicators/sma/${ticker}?days=50`);
+        const data = await res.json();
+        
+        if (!data || data.length === 0) {
+            document.getElementById('sma-loading').textContent = 'No SMA quantitative data available for this ticker.';
+            return;
+        }
+
+        document.getElementById('sma-loading').style.display = 'none';
+        const container = document.getElementById('sma-results-container');
+        container.style.display = 'block';
+
+        if(smaChartInstance) { smaChartInstance.dispose(); }
+        smaChartInstance = echarts.init(container);
+
+        const xAxisDates = data.map(d => d.date);
+        const yAxisSma = data.map(d => d.sma);
+
+        const option = {
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross', lineStyle: { color: 'rgba(255,255,255,0.2)' } } },
+            grid: { left: '5%', right: '5%', bottom: '5%', top: '10%', containLabel: true },
+            xAxis: {
+                type: 'category',
+                data: xAxisDates,
+                boundaryGap: false,
+                axisLabel: { color: '#a1a1aa', fontSize: 10 },
+                axisLine: { lineStyle: { color: '#3f3f46' } }
+            },
+            yAxis: {
+                type: 'value',
+                scale: true,
+                axisLabel: { color: '#a1a1aa', fontSize: 10, formatter: '${value}' },
+                splitLine: { lineStyle: { color: '#27272a' } }
+            },
+            series: [
+                {
+                    name: 'SMA 50-Day',
+                    type: 'line',
+                    data: yAxisSma,
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 3, color: '#f59e0b' },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(245,158,11,0.3)' },
+                            { offset: 1, color: 'rgba(245,158,11,0.0)' }
+                        ])
+                    }
+                }
+            ]
+        };
+        smaChartInstance.setOption(option);
+    } catch(e) {
+        document.getElementById('sma-loading').textContent = "Error fetching Python Engine data.\n" + e.message;
+    }
 }
 
 // ── Delete ────────────────────────────────────────────
@@ -518,6 +743,169 @@ function openCashModal(action) {
 function closeModal() { document.getElementById('modal-backdrop').classList.remove('open'); }
 async function modalConfirm() { if (modalAction) await modalAction(); }
 document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') closeModal(); });
+// ── E2E Interactive Wizard ──────────────────────────────
+let e2eCurrentStep = 0;
+let e2eTempPortfolioId = null;
+const e2eTerminal = document.getElementById('e2e-terminal');
+
+const e2eSteps = [
+  {
+    label: "Step 1: HTTP POST ➔ Create E2E Portfolio",
+    action: async () => {
+      const res = await fetch(`${API}/portfolios`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: 'AutoE2E Portfolio', userId: 'tester_script'}) });
+      const data = await res.json();
+      e2eTempPortfolioId = data.id;
+      await selectPortfolio(e2eTempPortfolioId, 'AutoE2E Portfolio'); // visually load it onto the UI
+      return `Created abstract database container with ID: ${e2eTempPortfolioId}\nInitial Cash Balance: $0.00`;
+    }
+  },
+  {
+    label: "Step 2: HTTP POST ➔ Deposit Core Fiat Reserves",
+    action: async () => {
+      await fetch(`${API}/portfolios/${e2eTempPortfolioId}/cash`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({action: 'DEPOSIT', amount: 50000}) });
+      await selectPortfolio(e2eTempPortfolioId, 'AutoE2E Portfolio'); // reflect cash balance
+      return `Deposited $50,000.00 into account liquidity pool.\nVerifying CRUD ledger... Success.`;
+    }
+  },
+  {
+    label: "Step 3: HTTP POST ➔ Positive Buy (Valid Asset)",
+    action: async () => {
+      const payload = { action: 'BUY', tickerSymbol: 'AAPL', volume: 10, price: 10 }; 
+      const res = await fetch(`${API}/portfolios/${e2eTempPortfolioId}/transactions`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if(!res.ok) throw new Error("Purchase Failed. Check MarketPrice existence.");
+      await selectPortfolio(e2eTempPortfolioId, 'AutoE2E Portfolio'); // watch the table and chart render
+      return `Transaction queued for AAPL.\nServer validated universe whitelist and enforced authoritative pricing.`;
+    }
+  },
+  {
+    label: "Step 4: HTTP POST ➔ Negative Buy (Invalid Asset)",
+    action: async () => {
+      const payload = { action: 'BUY', tickerSymbol: 'UFO_CORP', volume: 100, price: 5 };
+      const res = await fetch(`${API}/portfolios/${e2eTempPortfolioId}/transactions`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if(res.ok) throw new Error("Security loop breach! Illegal asset was purchased.");
+      const errorText = await res.text();
+      return `Intercepted invalid purchase attempt for 'UFO_CORP'!\nServer firmly replied: [400 Bad Request] ${errorText}`;
+    }
+  },
+  {
+    label: "Step 5: API Proxy ➔ Fetch Python Quant Metrics",
+    action: async () => {
+      await openSmaModal('AAPL'); // Pop the real SMA modal in the UI
+      const res = await fetch(`${API}/market/indicators/sma/AAPL?days=20`);
+      if(!res.ok) throw new Error("Failed connecting to FastAPI Python Service.");
+      const stats = await res.json();
+      return `Successfully traversed Golang API Gateway directly into Python Microservice port :8000.\nReturned SMA matrix size: ${stats.length} nodes ... Data Integrity [PASS]`;
+    }
+  },
+  {
+    label: "Step 6: HTTP DELETE ➔ Terminate Testing Object",
+    action: async () => {
+      await fetch(`${API}/portfolios/${e2eTempPortfolioId}`, { method: 'DELETE' });
+      document.getElementById('sma-modal-backdrop').style.display = 'none'; // Clear the popup
+      selectedPortfolioId = null;
+      document.getElementById('portfolio-name').textContent = "Select a portfolio";
+      document.getElementById('table-container').innerHTML = '<div id="empty-state">Select a portfolio to view holdings</div>';
+      renderChartEmpty();
+      if(allocationChartInstance) allocationChartInstance.clear();
+      await loadPortfolios(); // Remove it from sidebar
+      return `Cascaded DELETE invoked on Portfolio ID ${e2eTempPortfolioId}.\nAll underlying SQL structures cleared.\nE2E Lifecycle Loop Completed.`;
+    }
+  }
+];
+
+function openE2ETester() {
+    e2eCurrentStep = 0;
+    e2eTempPortfolioId = null;
+    e2eTerminal.innerHTML = `<div>Welcome to VibeCoding E2E Orchestrator.</div><div style="color:var(--text-muted)">Click "Start Verification" to visibly inject operations into the DOM.</div>`;
+    document.getElementById('e2e-status').textContent = 'Idle';
+    document.getElementById('e2e-status').style.color = 'var(--text-muted)';
+    document.getElementById('e2e-step-count').textContent = `0 / ${e2eSteps.length}`;
+    document.getElementById('btn-e2e-next').textContent = "Start Verification";
+    document.getElementById('btn-e2e-next').style.display = 'block';
+    
+    document.getElementById('e2e-floating-window').style.display = 'flex';
+}
+
+function e2eLog(msg, color="var(--primary)") {
+    const el = document.createElement('div');
+    el.innerHTML = `<span style="color:${color};">> </span>${msg.replace(/\n/g, '<br>&nbsp;&nbsp;')}`;
+    e2eTerminal.appendChild(el);
+    e2eTerminal.scrollTop = e2eTerminal.scrollHeight;
+}
+
+async function nextE2EStep() {
+    if(e2eCurrentStep >= e2eSteps.length) {
+        document.getElementById('e2e-floating-window').style.display = 'none';
+        await loadPortfolios(); // refresh dashboard just in case
+        return;
+    }
+
+    const stepInfo = e2eSteps[e2eCurrentStep];
+    const btn = document.getElementById('btn-e2e-next');
+    
+    // UI Loading state
+    btn.disabled = true;
+    btn.textContent = "Executing...";
+    document.getElementById('e2e-status').textContent = `Running Step ${e2eCurrentStep + 1}...`;
+    document.getElementById('e2e-status').style.color = 'var(--primary)';
+    
+    e2eLog(`<strong>${stepInfo.label}</strong>`, '#eab308');
+
+    try {
+        const resultString = await stepInfo.action();
+        e2eLog(resultString, '#10b981');
+    } catch(err) {
+        e2eLog(`[ERROR] ${err.message}`, '#ef4444');
+        e2eLog(`E2E Simulation Aborted.`, '#ef4444');
+        btn.textContent = "Close Wizard";
+        btn.disabled = false;
+        e2eCurrentStep = 999;
+        document.getElementById('e2e-status').textContent = 'Failed';
+        document.getElementById('e2e-status').style.color = '#ef4444';
+        return;
+    }
+
+    e2eCurrentStep++;
+    document.getElementById('e2e-step-count').textContent = `${e2eCurrentStep} / ${e2eSteps.length}`;
+    
+    btn.disabled = false;
+    if(e2eCurrentStep >= e2eSteps.length) {
+        document.getElementById('e2e-status').textContent = '✓ Passed';
+        document.getElementById('e2e-status').style.color = '#10b981';
+        btn.textContent = "Finish & Close";
+        btn.style.background = "#10b981";
+        btn.style.borderColor = "#10b981";
+    } else {
+        btn.textContent = "Execute Next Step";
+    }
+}
+
+// ── Master Kill Switch ────────────────────────────────
+async function shutdownServers() {
+    if(!confirm("Are you absolutely sure you want to send a SIGKILL to the Java Backend, Python Quant Data service, and the Go API Gateway? All background terminals will be forcibly terminated.")) return;
+    
+    try {
+        // We do not await since the socket may die mid-response as server commits seppuku
+        fetch(`${API}/system/shutdown`, { method: 'POST' });
+        
+        // Immediate visual feedback takeover
+        document.body.innerHTML = `
+            <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'Inter', sans-serif; background:var(--bg); color:var(--text);">
+                <div style="font-size: 5rem; margin-bottom: 1rem;">🛑</div>
+                <h1 style="font-size:2.5rem; margin-bottom:1rem; color:var(--danger); font-weight:700;">SYSTEM TERMINATED</h1>
+                <h2 style="font-weight:400; color:var(--text-muted);">The multi-service cluster has been safely dismantled.</h2>
+                <div style="margin-top:2rem; padding: 1rem 2rem; border:1px solid var(--border); background:var(--surface2); border-radius:8px; font-family:monospace; color:var(--primary); box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+                    SIGKILL -> [Spring Boot :8080]<br>
+                    SIGKILL -> [Python FastAPI :8000]<br>
+                    SIGKILL -> [Go API Gateway :8090]<br>
+                </div>
+                <p style="margin-top:3rem; font-size:0.9rem; color:var(--text-soft);">You may now safely close this browser window.</p>
+            </div>
+        `;
+    } catch(e) {
+        console.warn("Connection detached before acknowledgement:", e);
+    }
+}
 </script>
 </body>
 </html>

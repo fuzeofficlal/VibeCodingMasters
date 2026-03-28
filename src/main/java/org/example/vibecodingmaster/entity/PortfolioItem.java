@@ -60,6 +60,12 @@ public class PortfolioItem {
     @Column(name = "purchase_price", precision = 15, scale = 4)
     private BigDecimal purchasePrice;
 
+    @Column(name = "target_price", precision = 19, scale = 4)
+    private BigDecimal targetPrice;
+
+    @Column(name = "stop_loss_price", precision = 19, scale = 4)
+    private BigDecimal stopLossPrice;
+
     @Column(name = "purchase_date")
     private LocalDate purchaseDate;
 

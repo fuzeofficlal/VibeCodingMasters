@@ -91,4 +91,26 @@ public class PortfolioController {
     public PerformanceResponseDto getPerformance(@PathVariable Long portfolioId) {
         return portfolioService.calculatePerformance(portfolioId);
     }
+
+    // =====================================
+    // Scaffolding Endpoints (Team Tasks)
+    // =====================================
+
+    @GetMapping("/{portfolioId}/allocation")
+    @Operation(summary = "[Task 2] Get Asset Allocation Breakdown")
+    public java.util.Map<String, java.math.BigDecimal> getAssetAllocation(@PathVariable Long portfolioId) {
+        return portfolioService.getAssetAllocation(portfolioId);
+    }
+
+    @PutMapping("/{portfolioId}/items/{itemId}/alerts")
+    @Operation(summary = "[Task 3] Set Price Alerts for a Holding")
+    public void setPriceAlerts(@PathVariable Long portfolioId, @PathVariable Long itemId, @RequestBody java.util.Map<String, java.math.BigDecimal> payload) {
+        portfolioService.setPriceAlerts(portfolioId, itemId, payload.get("targetPrice"), payload.get("stopLossPrice"));
+    }
+
+    @GetMapping("/{portfolioId}/alerts")
+    @Operation(summary = "[Task 3] Check active Price Alerts")
+    public List<String> checkPriceAlerts(@PathVariable Long portfolioId) {
+        return portfolioService.checkPriceAlerts(portfolioId);
+    }
 }

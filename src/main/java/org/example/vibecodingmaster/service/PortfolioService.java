@@ -265,6 +265,14 @@ public class PortfolioService {
             currentTotalValue = currentTotalValue.add(vol.multiply(currentPrice));
         }
 
+        // Incorporate Portfolio's native Uninvested Cash
+        Portfolio portfolio = portfolioRepository.findById(portfolioId).orElse(null);
+        BigDecimal uninvestedCash = (portfolio != null && portfolio.getCashBalance() != null) 
+                ? portfolio.getCashBalance() : BigDecimal.ZERO;
+
+        currentTotalValue = currentTotalValue.add(uninvestedCash);
+        totalCost = totalCost.add(uninvestedCash);
+
         BigDecimal roiPercentage = BigDecimal.ZERO;
         if (totalCost.compareTo(BigDecimal.ZERO) > 0) {
             roiPercentage = currentTotalValue.subtract(totalCost)
@@ -272,30 +280,46 @@ public class PortfolioService {
                     .multiply(new BigDecimal(100));
         }
 
-        // Build historical trend: past 90 days
+        // Build historical trend: exact algorithmic back-calculation
         List<PerformanceResponseDto.HistoricalTrend> trends = new ArrayList<>();
-        if (!tickers.isEmpty()) {
-            LocalDate to = LocalDate.now();
-            LocalDate from = to.minusDays(90);
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(90);
 
+        TreeMap<LocalDate, BigDecimal> dailyValues = new TreeMap<>();
+        // Baseline every day with the uninvested cash position
+        for(int i = 0; i <= 90; i++) {
+            dailyValues.put(from.plusDays(i), uninvestedCash);
+        }
+
+        if (!tickers.isEmpty()) {
             List<HistoricalPrice> historicalPrices =
                     historicalPriceRepository.findByTickerSymbolInAndTradeDateBetweenOrderByTradeDate(
                             tickers, from, to);
 
-            // Group by date, sum each ticker's value on that day
-            TreeMap<LocalDate, BigDecimal> dailyValues = new TreeMap<>();
             for (HistoricalPrice hp : historicalPrices) {
                 BigDecimal vol = volumeByTicker.getOrDefault(hp.getTickerSymbol(), BigDecimal.ZERO);
-                BigDecimal dayValue = vol.multiply(hp.getClosePrice());
-                dailyValues.merge(hp.getTradeDate(), dayValue, BigDecimal::add);
+                BigDecimal dayStockValue = vol.multiply(hp.getClosePrice());
+                // Add the stock value back onto that day's cash foundation
+                dailyValues.merge(hp.getTradeDate(), dayStockValue, BigDecimal::add);
             }
 
-            dailyValues.forEach((date, value) ->
-                    trends.add(PerformanceResponseDto.HistoricalTrend.builder()
-                            .date(date)
-                            .portfolioValue(value)
-                            .build()));
+            // Forward-fill missing days (like Weekends) where stock market was closed
+            BigDecimal lastKnownStockValue = BigDecimal.ZERO;
+            for(Map.Entry<LocalDate, BigDecimal> entry : dailyValues.entrySet()) {
+                if (entry.getValue().compareTo(uninvestedCash) == 0 && entry.getKey().isAfter(from)) {
+                    // Weekend / Missing Data: carry over Friday's stock value
+                    dailyValues.put(entry.getKey(), uninvestedCash.add(lastKnownStockValue));
+                } else {
+                    lastKnownStockValue = entry.getValue().subtract(uninvestedCash);
+                }
+            }
         }
+
+        dailyValues.forEach((date, value) ->
+                trends.add(PerformanceResponseDto.HistoricalTrend.builder()
+                        .date(date)
+                        .portfolioValue(value)
+                        .build()));
 
         return PerformanceResponseDto.builder()
                 .totalCost(totalCost)
@@ -336,5 +360,40 @@ public class PortfolioService {
                 .purchaseDate(item.getPurchaseDate())
                 .createdAt(item.getCreatedAt())
                 .build();
+    }
+
+    // =====================================
+    // Scaffolding Endpoints (Team Tasks)
+    // =====================================
+
+    /**
+     * [TODO: Task 2] Asset Allocation Breakdown
+     */
+    public java.util.Map<String, BigDecimal> getAssetAllocation(Long portfolioId) {
+        // DUMMY RESPONSE FOR UI TESTING
+        return java.util.Map.of(
+            "STOCK", new BigDecimal("50000.00"),
+            "CASH", new BigDecimal("12000.00"),
+            "BOND", new BigDecimal("8000.00")
+        );
+    }
+
+    /**
+     * [TODO: Task 3] Set Price Alerts
+     */
+    public void setPriceAlerts(Long portfolioId, Long itemId, BigDecimal targetPrice, BigDecimal stopLossPrice) {
+        // DUMMY IMPLEMENTATION
+        System.out.println("Dummy: Set alerts for Item " + itemId + " -> Target: " + targetPrice + ", StopLoss: " + stopLossPrice);
+    }
+
+    /**
+     * [TODO: Task 3] Check Price Alerts
+     */
+    public List<String> checkPriceAlerts(Long portfolioId) {
+        // DUMMY RESPONSE FOR UI TESTING
+        return List.of(
+            "AAPL 已突破止盈目标 $200.00!",
+            "TSLA 严重跌破止损阈值 $150.00!"
+        );
     }
 }

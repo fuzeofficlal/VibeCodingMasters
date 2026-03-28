@@ -62,4 +62,53 @@ Navigate to **`http://localhost:8090`** to access the interactive Trade Desk and
 *(Ensure you perform CRUD flows through `:8090` exclusively to test Gateway capabilities).*
 
 ---
+
+## 🗄️ Database Schema (`portfolio_db`)
+The schema enforces strict ACID compliance and relational integrity natively tracking users' assets alongside market trends.
+
+1. **`portfolio`**: Core account anchor. Fields: `id`, `name`, `user_id`, `cash_balance`, `created_at`, `updated_at`.
+2. **`portfolio_item`**: Active holdings ledger. Fields: `id`, `portfolio_id` (FK), `ticker_symbol`, `asset_type` (STOCK, BOND, CASH), `volume`, `purchase_price`, `target_price` (Alerts), `stop_loss_price` (Alerts), `created_at`, `updated_at`.
+3. **`transaction_history`**: Immutable audit log. Fields: `id`, `portfolio_id` (FK), `transaction_type` (BUY, SELL, DEPOSIT, WITHDRAW), `ticker_symbol`, `amount`, `price`, `transaction_date`.
+4. **`market_price`**: Real-time price cache maintained by Python. Fields: `ticker_symbol` (PK), `current_price`, `last_updated_at`.
+5. **`historical_price`**: EOD pricing table for back-calculation. Fields: `id`, `ticker_symbol`, `close_price`, `trade_date`.
+6. **`watchlist`**: Developer feature for tracking user-favorited tickers. Fields: `id`, `portfolio_id` (FK), `ticker_symbol`, `created_at`.
+
+---
+
+## 📜 System Interfaces (API Endpoints)
+
+### 1. Gateway Routing (Go - `localhost:8090`)
+- **ANY `/api/v2/*`** -> Rewrites gracefully to `/api/v1/*` and proxies to the Java Backend.
+- **ANY `/api/v2/market/*`** -> Bypasses Java, proxies straight into Python Data Service.
+- **ANY `/`** -> Retains reverse-proxy connection to serve `index.html`.
+
+### 2. Core Business Engine (Java - `localhost:8080`)
+- `POST /api/v1/portfolios` - Bootstraps a fresh user abstract portfolio
+- `POST /api/v1/portfolios/{id}/cash` - Liquidity deposit / withdrawal
+- `POST /api/v1/portfolios/{id}/transactions` - Asset transaction ledger mutations
+- `GET /api/v1/portfolios/{id}/performance` - Master Valuations engine (ROI & 90-day History)
+- `GET /api/v1/portfolios/{id}/allocation` - Asset Allocation Pie Chart Aggregation
+- `PUT /api/v1/portfolios/{id}/items/{itemId}/alerts` - Sets algorithmic trading boundary conditions
+- `POST /api/v1/system/shutdown` - Execute system-wide kill switch across terminal trees
+
+### 3. Quantitative Market Engine (Python - `localhost:8000`)
+- `POST /api/v1/market/sync` - Overrides schedulers and triggers manual ETL pipeline dump
+- `GET /api/v1/market/indicators/sma/{ticker}` - Performs live algorithmic Numpy/Pandas SMA calculations
+
+---
+
+## 🧠 Business Logic Highlights
+
+**1. Transaction Ledger Integrity**
+- **Purchasing**: A user cannot buy an asset with insufficient `cash_balance`. The Java service inherently guards against API spoofing by validating requested buy prices exclusively against the authoritative `market_price` MySQL table run by Python.
+- **Idempotency**: All financial footprint modifications enforce strict Spring `@Transactional` persistence. If an asset buy request goes through, it deducts uninvested cash, upserts the new volume into `portfolio_item` via Optimistic Locking, and imprints a `BUY` record seamlessly into `transaction_history` in one single DB commit.
+
+**2. Market Data Pipeline (Python ETL Scheduled Flow)**
+- **Cold Boot Recovery Algorithm**: On boot sequence, Python iterates through the `historical_price` database to fetch the last known trade date for each ticker in the S&P 500, immediately requesting only the precise gap days from Yahoo Finance APIs. 
+- **Intraday Flow Control**: The `APScheduler` cron job runs strictly between **9:30 AM and 4:00 PM EST**, generating parallel requests using `ThreadPoolExecutor` to upsert thousands of high-frequency price pulses into `market_price`.
+
+**3. Algorithmic Forward-Fill Valuations (Java)**
+- The 90-day historical visualization uses pure backend algorithmic calculation over mathematical UI hacks. It traverses backwards dynamically pulling the specific `historical_price` table mapping to the user's holdings at exactly that date. Even if weekends or holidays cause market gaps, the Java simulation employs a Forward-fill logic mechanism anchored upon the static `uninvestedCash` block to guarantee perfectly continuous mathematical visualization on the Dashboard.
+
+---
 *Developed with Vibe & Engineering Discipline.*
