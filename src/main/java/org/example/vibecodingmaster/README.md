@@ -1,0 +1,6 @@
+- **[controller](./controller/README.md)**: Web 层，定义 RESTful API 接口，处理请求进入和响应返回。
+- **[service](./service/README.md)**: 业务逻辑层，包含核心计算引擎（ROI 计算、持仓聚合）和事务管理。
+- **[repository](./repository/README.md)**: 数据访问层，基于 Spring Data JPA，直接与 MySQL 交互。
+- **[entity](./entity/README.md)**: 领域模型层，定义数据库映射对象及关联关系（一对多、多对一）。
+- **[dto](./dto/README.md)**: 数据传输层，定义前后端交互的数据契约，实现 Entity 的封装与解耦。
+- **[exception](./exception/README.md)**: 异常处理层，提供全局异常拦截和标准化的错误响应。
