@@ -11,7 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/portfolios")
-@Tag(name = "Portfolio API", description = "Endpoints for managing user investment portfolios and calculate performance")
+@Tag(name = "Portfolio API", description = "Endpoints for managing portfolios and calculations")
 public class PortfolioController {
 
     private final PortfolioService portfolioService;
@@ -22,7 +22,7 @@ public class PortfolioController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a portfolio")
+    @Operation(summary = "Create portfolio")
     public PortfolioDto createPortfolio(@RequestBody CreatePortfolioRequest request) {
         return portfolioService.createPortfolio(request);
     }
@@ -56,24 +56,28 @@ public class PortfolioController {
     // Portfolio Items Endpoints
     // =====================================
 
-    @PostMapping("/{portfolioId}/items")
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Add an item to portfolio")
-    public PortfolioItemDto addPortfolioItem(@PathVariable Long portfolioId, @RequestBody AddPortfolioItemRequest request) {
-        return portfolioService.addPortfolioItem(portfolioId, request);
+    @PostMapping("/{portfolioId}/transactions")
+    @Operation(summary = "Submit a trade order")
+    public void submitOrder(@PathVariable Long portfolioId, @RequestBody OrderRequest request) {
+        if ("BUY".equalsIgnoreCase(request.getAction())) {
+            portfolioService.buyAsset(portfolioId, request);
+        } else if ("SELL".equalsIgnoreCase(request.getAction())) {
+            portfolioService.sellAsset(portfolioId, request);
+        } else {
+            throw new IllegalArgumentException("Invalid action: " + request.getAction());
+        }
     }
 
-    @PutMapping("/{portfolioId}/items/{itemId}")
-    @Operation(summary = "Update a portfolio item")
-    public PortfolioItemDto updatePortfolioItem(@PathVariable Long portfolioId, @PathVariable Long itemId, @RequestBody UpdatePortfolioItemRequest request) {
-        return portfolioService.updatePortfolioItem(portfolioId, itemId, request);
-    }
-
-    @DeleteMapping("/{portfolioId}/items/{itemId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Remove a portfolio item")
-    public void deletePortfolioItem(@PathVariable Long portfolioId, @PathVariable Long itemId) {
-        portfolioService.removePortfolioItem(portfolioId, itemId);
+    @PostMapping("/{portfolioId}/cash")
+    @Operation(summary = "Deposit or Withdraw cash")
+    public void handleCash(@PathVariable Long portfolioId, @RequestBody CashTransactionRequest request) {
+        if ("DEPOSIT".equalsIgnoreCase(request.getAction())) {
+            portfolioService.depositCash(portfolioId, request.getAmount());
+        } else if ("WITHDRAW".equalsIgnoreCase(request.getAction())) {
+            portfolioService.withdrawCash(portfolioId, request.getAmount());
+        } else {
+            throw new IllegalArgumentException("Invalid action: " + request.getAction());
+        }
     }
 
     @GetMapping("/{portfolioId}/items")

@@ -89,6 +89,4 @@ ticker_symbol & trade_date (Composite PK): 组合主键。
 close_price: 每日收盘价。
 
 架构意义：支持复杂的数据分析，直接服务于前端的“查看表现 (View the performance)”折线图功能，并为未来的 AI 预测或蒙特卡洛模拟（Monte Carlo simulation）提供底层原始数据。
-
-设计笔记：
-在处理 volume 和 price 等金融字段时，务必避免使用浮点数（float/double），推荐使用 DECIMAL 类型以防止精度丢失。
+使用 DECIMAL 类型以防止精度丢失。

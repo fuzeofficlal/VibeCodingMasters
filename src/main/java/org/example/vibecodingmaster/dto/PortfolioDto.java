@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,5 +19,6 @@ public class PortfolioDto {
     private String name;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private BigDecimal cashBalance;
     private List<PortfolioItemDto> items;
 }
