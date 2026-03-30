@@ -2,6 +2,9 @@
 
 VibeCodingMaster is a robust, financial-grade investment portfolio management platform. The application is built using a modern **Microservices Architecture**, cleanly separating the responsibilities of API routing, business transaction processing, and ETL market data aggregation.
 
+
+
+JIRA https://vibecodingmaster.atlassian.net/jira/software/projects/SCRUM/boards/1/timeline?atlOrigin=eyJpIjoiYjk2YTFiNTU5YzE0NGViMjkyNzMwOWI3MzQzYjE1NjIiLCJwIjoiaiJ9
 ---
 
 ## 🏗️ Architecture & Component Layout
