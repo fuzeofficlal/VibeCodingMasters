@@ -20,10 +20,9 @@ public class SystemController {
                 // Wait for the HTTP response to be fully transmitted
                 Thread.sleep(1000);
                 
-                // Reverse execution order: kill Java LAST to prevent the OS tree-kill from instantly terminating the current cmd thread before it finishes the chain.
-                String command = "taskkill /FI \"WINDOWTITLE eq Go API Gateway*\" /T /F & " +
-                                 "taskkill /FI \"WINDOWTITLE eq Python Market Microservice*\" /T /F & " +
-                                 "taskkill /FI \"WINDOWTITLE eq Spring Boot Backend*\" /T /F";
+                // Execute a decoupled batch script that hunts precisely by TCP ports
+                // This defeats Windows Terminal Tab abstraction layers effortlessly.
+                String command = "start kill-all.bat";
                 
                 // If it fails to find the window, safety fallback to kill self
                 Runtime.getRuntime().exec(new String[]{"cmd.exe", "/c", command});

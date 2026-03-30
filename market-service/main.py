@@ -24,9 +24,25 @@ async def startup_event():
     # 2. Trigger an immediate catch-up sync (Cold Start) has been DISABLED.
     # The server will now peacefully wait for the user to trigger it from the frontend UI.
     print("[STARTUP] [FastAPI] Awaiting manual Sync trigger from User Interface...")
+from services.polling_engine import poll_realtime_prices
+from database import SessionLocal
+
+def execute_full_override_sync():
+    """Execute both historical catch-up and real-time polling bypassing time gates."""
+    # 1. Historical Catch-up
+    run_sync_task()
+    
+    # 2. Force current market_price update
+    print("[MANUAL] Executing Forced Real-Time Polling...")
+    db = SessionLocal()
+    try:
+        poll_realtime_prices(db)
+    finally:
+        db.close()
+
 @app.post("/api/v1/market/sync", summary="Manually trigger ETL High-Watermark Sync")
 async def manual_sync(background_tasks: BackgroundTasks):
-    background_tasks.add_task(run_sync_task)
+    background_tasks.add_task(execute_full_override_sync)
     return {"status": "accepted", "message": "Background ETL Sync Started."}
 
 @app.get("/api/v1/market/prices", summary="Get all current real-time market prices")
