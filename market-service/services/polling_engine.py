@@ -1,6 +1,7 @@
 import time
 import yfinance as yf
 from datetime import datetime
+import pandas as pd
 from sqlalchemy.dialects.mysql import insert
 from models import CompanyInfo, MarketPrice
 

@@ -48,7 +48,7 @@ def catch_up_sync(db):
             # 4. Clean Timezones & Extract Data
             # MySQL DATE type doesn't store timezones. Convert index to naive timezone dates.
             if hist.index.tz is not None:
-                hist.index = hist.index.tz_localize(None)
+                hist.index = hist.index.tz_localize(None) # DataTimeindex here
 
             records = []
             for dt, row in hist.iterrows():
