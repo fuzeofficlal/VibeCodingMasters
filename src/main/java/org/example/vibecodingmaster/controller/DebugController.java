@@ -17,14 +17,10 @@ public class DebugController {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    /**
-     * Dumps up to 100 rows of any specified table in the database.
-     * WARNING: Raw SQL execution without parameterization on the table name.
-     * Safe ONLY for local VibeCoding environments.
-     */
+    
     @GetMapping("/table/{tableName}")
     public ResponseEntity<?> getTableData(@PathVariable String tableName) {
-        // Basic sanitization to prevent arbitrary SQL execution
+        
         if (!tableName.matches("^[a-zA-Z0-9_]+$")) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid table name format"));
         }

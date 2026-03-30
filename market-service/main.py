@@ -13,26 +13,26 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Application Lifecycle Hook
+
 @app.on_event("startup")
 async def startup_event():
     print("[STARTUP] [FastAPI] Initializing Market Data Service...")
     
-    # 1. Start APScheduler
+    
     start_scheduler()
     
-    # 2. Trigger an immediate catch-up sync (Cold Start) has been DISABLED.
-    # The server will now peacefully wait for the user to trigger it from the frontend UI.
+    
+    
     print("[STARTUP] [FastAPI] Awaiting manual Sync trigger from User Interface...")
 from services.polling_engine import poll_realtime_prices
 from database import SessionLocal
 
 def execute_full_override_sync():
     """Execute both historical catch-up and real-time polling bypassing time gates."""
-    # 1. Historical Catch-up
+    
     run_sync_task()
     
-    # 2. Force current market_price update
+    
     print("[MANUAL] Executing Forced Real-Time Polling...")
     db = SessionLocal()
     try:

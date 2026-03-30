@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 
 @Data
 public class OrderRequest {
-    private String action; // BUY or SELL
+    private String action; 
     private String tickerSymbol;
     private Integer volume;
     private BigDecimal price;

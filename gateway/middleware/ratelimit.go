@@ -17,7 +17,7 @@ var (
 	mu      sync.Mutex
 )
 
-// 每个 IP 每秒最多 20 个请求，突发允许 40 个
+
 func getLimiter(ip string) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()

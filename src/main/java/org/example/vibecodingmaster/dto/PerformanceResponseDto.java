@@ -16,7 +16,7 @@ import java.util.List;
 public class PerformanceResponseDto {
     private BigDecimal totalCost;
     private BigDecimal currentTotalValue;
-    private BigDecimal roiPercentage; // Return on Investment %
+    private BigDecimal roiPercentage; 
     private List<HistoricalTrend> historicalTrendList;
     
     @Data
