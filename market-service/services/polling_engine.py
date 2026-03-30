@@ -12,7 +12,7 @@ def poll_realtime_prices(db):
     """
     print(f"[POLL] Triggered Real-time Snapshot at {datetime.now()} EST")
 
-    
+    # 1. Fetch all tickers
     companies = db.query(CompanyInfo.ticker_symbol).all()
     if not companies:
         print("[WARN] No companies found in portfolio_db.")
@@ -21,11 +21,11 @@ def poll_realtime_prices(db):
     tickers = [c[0] for c in companies]
     tickers_string = " ".join(tickers)
 
-    
+    # 2. Batch Download Data
     try:
-        
-        
-        
+        # download returns a MultiIndex DataFrame if there are multiple tickers
+        # Data format: columns level 0 consists of price fields ('Close', 'Open', etc.)
+        # columns level 1 consists of tickers ('AAPL', 'MSFT', etc.)
         print(f"[FETCH] Real-time 1d snapshot for {len(tickers)} tickers...")
         snapshot = yf.download(tickers_string, period="1d", threads=True, progress=False)
 
@@ -34,10 +34,10 @@ def poll_realtime_prices(db):
             return
 
         records = []
-        
+        # Support both single-ticker and multi-ticker return types
         if len(tickers) == 1:
             ticker = tickers[0]
-            
+            # Series or DataFrame without MultiIndex
             if 'Close' in snapshot.columns:
                 close_price = snapshot['Close'].iloc[-1]
                 records.append({
@@ -45,7 +45,7 @@ def poll_realtime_prices(db):
                     "current_price": float(close_price)
                 })
         else:
-            
+            # MultiIndex columns. e.g. snapshot['Close']['AAPL']
             if 'Close' in snapshot.columns.levels[0]:
                 close_df = snapshot['Close']
                 for ticker in tickers:
@@ -61,11 +61,11 @@ def poll_realtime_prices(db):
             print("[ERROR] Found no processable close prices.")
             return
 
-        
+        # 3. UPSERT into MySQL table `market_price`
         stmt = insert(MarketPrice).values(records)
         upsert_stmt = stmt.on_duplicate_key_update(
             current_price=stmt.inserted.current_price
-            
+            # last_updated will auto-update based on ON UPDATE CURRENT_TIMESTAMP mapping
         )
 
         db.execute(upsert_stmt)

@@ -18,14 +18,14 @@ def run_sync_task():
 
 def run_polling_task():
     """Wrapper to inject a DB session into the poll_realtime_prices engine."""
-    
+    # Strict market hour check (9:30 AM - 4:00 PM EST)
     nyc_tz = pytz.timezone('America/New_York')
     now_nyc = datetime.now(nyc_tz)
     
     if now_nyc.hour == 9 and now_nyc.minute < 30:
-        return 
+        return # Skip pre-market 9:00 - 9:29
     if now_nyc.hour == 16 and now_nyc.minute > 0:
-        return 
+        return # Skip post-market 16:01 - 16:59
         
     print("[SCHEDULER] Executing Intra-day Real-Time Polling...")
     db = SessionLocal()
@@ -38,7 +38,7 @@ def run_polling_task():
 def start_scheduler():
     scheduler = BackgroundScheduler(timezone=pytz.timezone('America/New_York'))
     
-    
+    # 1. Catch-up Sync: Runs at 6:00 PM EST every weekday
     scheduler.add_job(
         run_sync_task,
         CronTrigger(day_of_week='mon-fri', hour=18, minute=0, timezone='America/New_York'),
@@ -46,8 +46,8 @@ def start_scheduler():
         replace_existing=True
     )
     
-    
-    
+    # 2. Real-time Polling: Runs every 5 minutes from 9:00 AM to 4:00 PM EST 
+    # (Pre/Post market strictly validated inside run_polling_task wrapper)
     scheduler.add_job(
         run_polling_task,
         CronTrigger(day_of_week='mon-fri', hour='9-16', minute='*/5', timezone='America/New_York'),

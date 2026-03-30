@@ -5,6 +5,6 @@ import java.math.BigDecimal;
 
 @Data
 public class CashTransactionRequest {
-    private String action; 
+    private String action; // DEPOSIT or WITHDRAW
     private BigDecimal amount;
 }

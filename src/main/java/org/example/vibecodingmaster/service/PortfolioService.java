@@ -39,16 +39,20 @@ public class PortfolioService {
     private final TransactionHistoryRepository transactionHistoryRepository;
 
     public PortfolioService(PortfolioRepository portfolioRepository,
-            PortfolioItemRepository portfolioItemRepository,
-            MarketPriceRepository marketPriceRepository,
-            HistoricalPriceRepository historicalPriceRepository,
-            TransactionHistoryRepository transactionHistoryRepository) {
+                            PortfolioItemRepository portfolioItemRepository,
+                            MarketPriceRepository marketPriceRepository,
+                            HistoricalPriceRepository historicalPriceRepository,
+                            TransactionHistoryRepository transactionHistoryRepository) {
         this.portfolioRepository = portfolioRepository;
         this.portfolioItemRepository = portfolioItemRepository;
         this.marketPriceRepository = marketPriceRepository;
         this.historicalPriceRepository = historicalPriceRepository;
         this.transactionHistoryRepository = transactionHistoryRepository;
     }
+
+    // ========================================
+    // Portfolio Core Operations
+    // ========================================
 
     public PortfolioDto createPortfolio(CreatePortfolioRequest request) {
         Portfolio portfolio = Portfolio.builder()
@@ -87,15 +91,18 @@ public class PortfolioService {
         return portfolioRepository.findAll().stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
+    // ========================================
+    // Transaction Engine (Phase 3)
+    // ========================================
+
     public void depositCash(Long portfolioId, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
-            throw new IllegalArgumentException("Amount must be positive");
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("Amount must be positive");
         Portfolio portfolio = portfolioRepository.findById(portfolioId)
                 .orElseThrow(() -> new EntityNotFoundException("Portfolio not found"));
-
+        
         portfolio.setCashBalance(portfolio.getCashBalance().add(amount));
         portfolioRepository.save(portfolio);
-
+        
         TransactionHistory tx = TransactionHistory.builder()
                 .portfolio(portfolio).transactionType(TransactionType.DEPOSIT)
                 .volume(0).price(amount).status(TransactionStatus.COMPLETED)
@@ -104,18 +111,17 @@ public class PortfolioService {
     }
 
     public void withdrawCash(Long portfolioId, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
-            throw new IllegalArgumentException("Amount must be positive");
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("Amount must be positive");
         Portfolio portfolio = portfolioRepository.findById(portfolioId)
                 .orElseThrow(() -> new EntityNotFoundException("Portfolio not found"));
-
+        
         if (portfolio.getCashBalance().compareTo(amount) < 0) {
             throw new IllegalArgumentException("Insufficient cash balance");
         }
-
+        
         portfolio.setCashBalance(portfolio.getCashBalance().subtract(amount));
         portfolioRepository.save(portfolio);
-
+        
         TransactionHistory tx = TransactionHistory.builder()
                 .portfolio(portfolio).transactionType(TransactionType.WITHDRAW)
                 .volume(0).price(amount).status(TransactionStatus.COMPLETED)
@@ -126,37 +132,35 @@ public class PortfolioService {
     public void buyAsset(Long portfolioId, OrderRequest request) {
         Portfolio portfolio = portfolioRepository.findById(portfolioId)
                 .orElseThrow(() -> new EntityNotFoundException("Portfolio not found"));
-
+        
         BigDecimal cost = request.getPrice().multiply(new BigDecimal(request.getVolume()));
         if (portfolio.getCashBalance().compareTo(cost) < 0) {
             throw new IllegalArgumentException("Insufficient cash balance to buy the asset");
         }
-
+        
         if (!marketPriceRepository.existsById(request.getTickerSymbol())) {
-            throw new IllegalArgumentException(
-                    "Asset not supported or tracked in the market universe: " + request.getTickerSymbol());
+            throw new IllegalArgumentException("Asset not supported or tracked in the market universe: " + request.getTickerSymbol());
         }
 
-        
+        // 1. Generate Transaction Ledger
         TransactionHistory tx = TransactionHistory.builder()
                 .portfolio(portfolio).transactionType(TransactionType.BUY)
                 .tickerSymbol(request.getTickerSymbol())
                 .volume(request.getVolume()).price(request.getPrice())
                 .status(TransactionStatus.COMPLETED).build();
         transactionHistoryRepository.save(tx);
-
         
+        // 2. Deduct Cash Balance
         portfolio.setCashBalance(portfolio.getCashBalance().subtract(cost));
         portfolioRepository.save(portfolio);
-
         
+        // 3. Update Portfolio Holding
         PortfolioItem item = portfolioItemRepository.findByPortfolioId(portfolioId).stream()
                 .filter(i -> request.getTickerSymbol().equals(i.getTickerSymbol()))
                 .findFirst().orElse(null);
-
+                
         if (item != null) {
-            BigDecimal oldTotal = item.getVolume()
-                    .multiply(item.getPurchasePrice() == null ? BigDecimal.ZERO : item.getPurchasePrice());
+            BigDecimal oldTotal = item.getVolume().multiply(item.getPurchasePrice() == null ? BigDecimal.ZERO : item.getPurchasePrice());
             BigDecimal newTotal = oldTotal.add(cost);
             BigDecimal newVolume = item.getVolume().add(new BigDecimal(request.getVolume()));
             item.setVolume(newVolume);
@@ -177,34 +181,34 @@ public class PortfolioService {
     public void sellAsset(Long portfolioId, OrderRequest request) {
         Portfolio portfolio = portfolioRepository.findById(portfolioId)
                 .orElseThrow(() -> new EntityNotFoundException("Portfolio not found"));
-
+                
         PortfolioItem item = portfolioItemRepository.findByPortfolioId(portfolioId).stream()
                 .filter(i -> request.getTickerSymbol().equals(i.getTickerSymbol()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Asset not found in portfolio"));
-
+                
         if (item.getVolume().compareTo(new BigDecimal(request.getVolume())) < 0) {
             throw new IllegalArgumentException("Insufficient volume to sell");
         }
-
-        BigDecimal proceed = request.getPrice().multiply(new BigDecimal(request.getVolume()));
-
         
+        BigDecimal proceed = request.getPrice().multiply(new BigDecimal(request.getVolume()));
+        
+        // 1. Generate Transaction Ledger
         TransactionHistory tx = TransactionHistory.builder()
                 .portfolio(portfolio).transactionType(TransactionType.SELL)
                 .tickerSymbol(request.getTickerSymbol())
                 .volume(request.getVolume()).price(request.getPrice())
                 .status(TransactionStatus.COMPLETED).build();
         transactionHistoryRepository.save(tx);
-
         
+        // 2. Add Proceeds to Cash Balance
         portfolio.setCashBalance(portfolio.getCashBalance().add(proceed));
         portfolioRepository.save(portfolio);
-
         
+        // 3. Deduct Volume from Holding
         item.setVolume(item.getVolume().subtract(new BigDecimal(request.getVolume())));
         if (item.getVolume().compareTo(BigDecimal.ZERO) == 0) {
-            portfolioItemRepository.delete(item); 
+            portfolioItemRepository.delete(item); // JPA handles soft deletion automatically
         } else {
             portfolioItemRepository.save(item);
         }
@@ -220,9 +224,9 @@ public class PortfolioService {
                 .collect(Collectors.toList());
     }
 
-    
-    
-    
+    // ========================================
+    // Performance Calculation Engine
+    // ========================================
 
     @Transactional(readOnly = true)
     public PerformanceResponseDto calculatePerformance(Long portfolioId) {
@@ -240,7 +244,7 @@ public class PortfolioService {
         BigDecimal totalCost = BigDecimal.ZERO;
         BigDecimal currentTotalValue = BigDecimal.ZERO;
 
-        
+        // Map of item volume by ticker for historical calculation
         Map<String, BigDecimal> volumeByTicker = new java.util.HashMap<>();
 
         for (PortfolioItem item : items) {
@@ -261,11 +265,10 @@ public class PortfolioService {
             currentTotalValue = currentTotalValue.add(vol.multiply(currentPrice));
         }
 
-        
+        // Incorporate Portfolio's native Uninvested Cash
         Portfolio portfolio = portfolioRepository.findById(portfolioId).orElse(null);
-        BigDecimal uninvestedCash = (portfolio != null && portfolio.getCashBalance() != null)
-                ? portfolio.getCashBalance()
-                : BigDecimal.ZERO;
+        BigDecimal uninvestedCash = (portfolio != null && portfolio.getCashBalance() != null) 
+                ? portfolio.getCashBalance() : BigDecimal.ZERO;
 
         currentTotalValue = currentTotalValue.add(uninvestedCash);
         totalCost = totalCost.add(uninvestedCash);
@@ -277,34 +280,34 @@ public class PortfolioService {
                     .multiply(new BigDecimal(100));
         }
 
-        
+        // Build historical trend: exact algorithmic back-calculation
         List<PerformanceResponseDto.HistoricalTrend> trends = new ArrayList<>();
         LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(90);
 
         TreeMap<LocalDate, BigDecimal> dailyValues = new TreeMap<>();
-        
-        for (int i = 0; i <= 90; i++) {
+        // Baseline every day with the uninvested cash position
+        for(int i = 0; i <= 90; i++) {
             dailyValues.put(from.plusDays(i), uninvestedCash);
         }
 
         if (!tickers.isEmpty()) {
-            List<HistoricalPrice> historicalPrices = historicalPriceRepository
-                    .findByTickerSymbolInAndTradeDateBetweenOrderByTradeDate(
+            List<HistoricalPrice> historicalPrices =
+                    historicalPriceRepository.findByTickerSymbolInAndTradeDateBetweenOrderByTradeDate(
                             tickers, from, to);
 
             for (HistoricalPrice hp : historicalPrices) {
                 BigDecimal vol = volumeByTicker.getOrDefault(hp.getTickerSymbol(), BigDecimal.ZERO);
                 BigDecimal dayStockValue = vol.multiply(hp.getClosePrice());
-                
+                // Add the stock value back onto that day's cash foundation
                 dailyValues.merge(hp.getTradeDate(), dayStockValue, BigDecimal::add);
             }
 
-            
+            // Forward-fill missing days (like Weekends) where stock market was closed
             BigDecimal lastKnownStockValue = BigDecimal.ZERO;
-            for (Map.Entry<LocalDate, BigDecimal> entry : dailyValues.entrySet()) {
+            for(Map.Entry<LocalDate, BigDecimal> entry : dailyValues.entrySet()) {
                 if (entry.getValue().compareTo(uninvestedCash) == 0 && entry.getKey().isAfter(from)) {
-                    
+                    // Weekend / Missing Data: carry over Friday's stock value
                     dailyValues.put(entry.getKey(), uninvestedCash.add(lastKnownStockValue));
                 } else {
                     lastKnownStockValue = entry.getValue().subtract(uninvestedCash);
@@ -312,10 +315,11 @@ public class PortfolioService {
             }
         }
 
-        dailyValues.forEach((date, value) -> trends.add(PerformanceResponseDto.HistoricalTrend.builder()
-                .date(date)
-                .portfolioValue(value)
-                .build()));
+        dailyValues.forEach((date, value) ->
+                trends.add(PerformanceResponseDto.HistoricalTrend.builder()
+                        .date(date)
+                        .portfolioValue(value)
+                        .build()));
 
         return PerformanceResponseDto.builder()
                 .totalCost(totalCost)
@@ -325,9 +329,9 @@ public class PortfolioService {
                 .build();
     }
 
-    
-    
-    
+    // ========================================
+    // Helper Mappers
+    // ========================================
 
     private PortfolioDto mapToDto(Portfolio portfolio) {
         List<PortfolioItemDto> itemDtos = new ArrayList<>();
@@ -358,31 +362,38 @@ public class PortfolioService {
                 .build();
     }
 
-    
-    
-    
+    // =====================================
+    // Scaffolding Endpoints (Team Tasks)
+    // =====================================
 
-    
+    /**
+     * [TODO: Task 2] Asset Allocation Breakdown
+     */
     public java.util.Map<String, BigDecimal> getAssetAllocation(Long portfolioId) {
-        
+        // DUMMY RESPONSE FOR UI TESTING
         return java.util.Map.of(
-                "STOCK", new BigDecimal("50000.00"),
-                "CASH", new BigDecimal("12000.00"),
-                "BOND", new BigDecimal("8000.00"));
+            "STOCK", new BigDecimal("50000.00"),
+            "CASH", new BigDecimal("12000.00"),
+            "BOND", new BigDecimal("8000.00")
+        );
     }
 
-    
+    /**
+     * [TODO: Task 3] Set Price Alerts
+     */
     public void setPriceAlerts(Long portfolioId, Long itemId, BigDecimal targetPrice, BigDecimal stopLossPrice) {
-        
-        System.out.println(
-                "Dummy: Set alerts for Item " + itemId + " -> Target: " + targetPrice + ", StopLoss: " + stopLossPrice);
+        // DUMMY IMPLEMENTATION
+        System.out.println("Dummy: Set alerts for Item " + itemId + " -> Target: " + targetPrice + ", StopLoss: " + stopLossPrice);
     }
 
-    
+    /**
+     * [TODO: Task 3] Check Price Alerts
+     */
     public List<String> checkPriceAlerts(Long portfolioId) {
-        
+        // DUMMY RESPONSE FOR UI TESTING
         return List.of(
-                "AAPL 已突破止盈目标 $200.00!",
-                "TSLA 严重跌破止损阈值 $150.00!");
+            "AAPL 已突破止盈目标 $200.00!",
+            "TSLA 严重跌破止损阈值 $150.00!"
+        );
     }
 }

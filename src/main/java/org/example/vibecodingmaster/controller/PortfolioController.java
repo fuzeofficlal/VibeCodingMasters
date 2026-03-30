@@ -52,9 +52,9 @@ public class PortfolioController {
         portfolioService.deletePortfolio(id);
     }
 
-    
-    
-    
+    // =====================================
+    // Portfolio Items Endpoints
+    // =====================================
 
     @PostMapping("/{portfolioId}/transactions")
     @Operation(summary = "Submit a trade order")
@@ -92,9 +92,9 @@ public class PortfolioController {
         return portfolioService.calculatePerformance(portfolioId);
     }
 
-    
-    
-    
+    // =====================================
+    // Scaffolding Endpoints (Team Tasks)
+    // =====================================
 
     @GetMapping("/{portfolioId}/allocation")
     @Operation(summary = "[Task 2] Get Asset Allocation Breakdown")

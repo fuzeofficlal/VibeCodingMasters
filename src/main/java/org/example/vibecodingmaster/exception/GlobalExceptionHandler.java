@@ -23,9 +23,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-        public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
-            ErrorResponse errorResponse = ErrorResponse.builder()
-                    .status(HttpStatus.BAD_REQUEST.value())
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value())
                 .message(ex.getMessage())
                 .timestamp(LocalDateTime.now())
                 .build();

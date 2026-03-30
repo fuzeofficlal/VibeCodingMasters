@@ -18,7 +18,7 @@ public class MigrationRunner {
 
             System.out.println("Starting Database Migration for Phase 1...");
 
-            
+            // 1. Alter portfolio
             System.out.println("Altering table portfolio...");
             try {
                 stmt.execute("ALTER TABLE portfolio ADD COLUMN cash_balance DECIMAL(15,4) DEFAULT 0");
@@ -30,7 +30,7 @@ public class MigrationRunner {
                 System.out.println("Warning altering portfolio (may already exist): " + e.getMessage());
             }
 
-            
+            // 2. Alter portfolio_item
             System.out.println("Altering table portfolio_item...");
             try {
                 stmt.execute("ALTER TABLE portfolio_item ADD COLUMN version INT DEFAULT 0");
@@ -41,7 +41,7 @@ public class MigrationRunner {
                 System.out.println("Warning altering portfolio_item (may already exist): " + e.getMessage());
             }
 
-            
+            // 3. Create transaction_history
             System.out.println("Creating table transaction_history...");
             String createTableTxHistory = 
                 "CREATE TABLE IF NOT EXISTS transaction_history (" +

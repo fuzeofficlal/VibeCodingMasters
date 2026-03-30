@@ -14,7 +14,7 @@ def calculate_sma(ticker: str, days: int) -> List[Dict]:
     - Applies df['close_price'].rolling(window=days).mean()
     """
     with engine.connect() as conn:
-        
+        # Fetch enough days to provide the 'days' rolling window + latest 100 points
         query = select(HistoricalPrice.trade_date, HistoricalPrice.close_price)\
             .where(HistoricalPrice.ticker_symbol == ticker)\
             .order_by(HistoricalPrice.trade_date.desc())\
@@ -25,19 +25,19 @@ def calculate_sma(ticker: str, days: int) -> List[Dict]:
     if df.empty:
         return []
 
-    
+    # Sort chronologically for rolling calculation
     df = df.sort_values('trade_date').reset_index(drop=True)
 
-    
+    # Calculate rolling SMA
     df['sma'] = df['close_price'].astype(float).rolling(window=days).mean()
 
-    
+    # Drop early records missing the SMA baseline
     df = df.dropna(subset=['sma'])
     
-    
+    # Optional: We only want to send back the most recent 100 valid SMA points to prevent massive UI payloads
     df = df.tail(100)
 
-    
+    # Format Output
     return [
         {
             "date": row['trade_date'].strftime('%Y-%m-%d'),
